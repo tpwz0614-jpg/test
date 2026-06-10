@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ボディメトリクス記録</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --primary: #4f7cff;
+      --primary-light: #eef1ff;
+      --weight-color: #4f7cff;
+      --fat-color: #f97316;
+      --muscle-color: #22c55e;
+      --text: #1e293b;
+      --muted: #64748b;
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    header span.icon {
+      font-size: 24px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    /* Summary stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .stat-box {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-box .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-box .value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .stat-box .unit {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .stat-box .diff {
+      font-size: 12px;
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .diff.up { color: var(--danger); }
+    .diff.down { color: var(--muscle-color); }
+    .diff.neutral { color: var(--muted); }
+
+    .weight-val { color: var(--weight-color); }
+    .fat-val    { color: var(--fat-color); }
+    .muscle-val { color: var(--muscle-color); }
+
+    /* Form */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .form-group input, .form-group textarea {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.15s;
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+    }
+
+    .form-group input:focus, .form-group textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.12);
+    }
+
+    .form-group input[type="date"] {
+      cursor: pointer;
+    }
+
+    .form-row-full {
+      grid-column: 1 / -1;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover { opacity: 0.88; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover { background: var(--bg); }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: none;
+      padding: 4px 8px;
+      font-size: 13px;
+    }
+
+    /* Chart tabs */
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 10px;
+      width: fit-content;
+    }
+
+    .tab {
+      padding: 7px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 7px;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 260px;
+    }
+
+    /* History table */
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .history-search {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      outline: none;
+      width: 200px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .history-search:focus {
+      border-color: var(--primary);
+      background: var(--surface);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+
+    tbody td {
+      padding: 12px 12px;
+      vertical-align: middle;
+    }
+
+    .memo-cell {
+      max-width: 240px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .empty-state .emoji {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e293b;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      transition: transform 0.3s, opacity 0.3s;
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); }
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      .stat-box .value { font-size: 20px; }
+      .container { padding: 16px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="icon">💪</span>
+  <h1>ボディメトリクス記録</h1>
+</header>
+
+<div class="container">
+
+  <!-- Summary -->
+  <div class="card">
+    <div class="card-title">最新データ</div>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="label">体重</div>
+        <div class="value weight-val" id="stat-weight">--</div>
+        <div class="unit">kg</div>
+        <div class="diff neutral" id="diff-weight"></div>
+      </div>
+      <div class="stat-box">
+        <div class="label">体脂肪率</div>
+        <div class="value fat-val" id="stat-fat">--</div>
+        <div class="unit">%</div>
+        <div class="diff neutral" id="diff-fat"></div>
+      </div>
+      <div class="stat-box">
+        <div class="label">筋肉量</div>
+        <div class="value muscle-val" id="stat-muscle">--</div>
+        <div class="unit">kg</div>
+        <div class="diff neutral" id="diff-muscle"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form -->
+  <div class="card">
+    <div class="card-title">記録を追加</div>
+    <form id="entry-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="input-date">日付</label>
+          <input type="date" id="input-date" required>
+        </div>
+        <div class="form-group">
+          <label for="input-weight">体重 (kg)</label>
+          <input type="number" id="input-weight" step="0.1" min="0" max="300" placeholder="例: 65.2">
+        </div>
+        <div class="form-group">
+          <label for="input-fat">体脂肪率 (%)</label>
+          <input type="number" id="input-fat" step="0.1" min="0" max="100" placeholder="例: 18.5">
+        </div>
+        <div class="form-group">
+          <label for="input-muscle">筋肉量 (kg)</label>
+          <input type="number" id="input-muscle" step="0.1" min="0" max="200" placeholder="例: 30.0">
+        </div>
+        <div class="form-group form-row-full">
+          <label for="input-memo">メモ</label>
+          <textarea id="input-memo" placeholder="今日の体調や運動内容など..."></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary" id="submit-btn">保存する</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Chart -->
+  <div class="card">
+    <div class="card-title">推移グラフ</div>
+    <div class="tab-bar">
+      <button class="tab active" data-metric="all">すべて</button>
+      <button class="tab" data-metric="weight">体重</button>
+      <button class="tab" data-metric="fat">体脂肪率</button>
+      <button class="tab" data-metric="muscle">筋肉量</button>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <div class="history-header">
+      <div class="card-title" style="margin-bottom:0">記録一覧</div>
+      <input type="text" class="history-search" id="search-input" placeholder="日付・メモを検索">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>体重 (kg)</th>
+            <th>体脂肪率 (%)</th>
+            <th>筋肉量 (kg)</th>
+            <th>メモ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state" style="display:none">
+        <div class="emoji">📋</div>
+        <div>記録がありません</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Storage ──────────────────────────────────────────────
+const STORAGE_KEY = 'body-metrics-v1';
+
+function loadData() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveData(records) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+// ── State ─────────────────────────────────────────────────
+let records = loadData();
+let editingId = null;
+let activeMetric = 'all';
+let searchQuery = '';
+let chart = null;
+
+// ── Utils ─────────────────────────────────────────────────
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function fmt(v, unit = '') {
+  return v != null ? `${v}${unit}` : '--';
+}
+
+function diffLabel(curr, prev) {
+  if (curr == null || prev == null) return { text: '', cls: 'neutral' };
+  const d = (curr - prev).toFixed(1);
+  if (d > 0) return { text: `+${d}`, cls: 'up' };
+  if (d < 0) return { text: `${d}`, cls: 'down' };
+  return { text: '±0', cls: 'neutral' };
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ── Sort records by date ───────────────────────────────────
+function sortedRecords() {
+  return [...records].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ── Stats ─────────────────────────────────────────────────
+function updateStats() {
+  const sorted = sortedRecords();
+  const last = sorted[sorted.length - 1];
+  const prev = sorted[sorted.length - 2];
+
+  const setVal = (id, v, unit) => {
+    document.getElementById(id).textContent = v != null ? v : '--';
+  };
+
+  setVal('stat-weight', last?.weight);
+  setVal('stat-fat', last?.fat);
+  setVal('stat-muscle', last?.muscle);
+
+  const setDiff = (id, curr, pr) => {
+    const { text, cls } = diffLabel(curr, pr);
+    const el = document.getElementById(id);
+    el.textContent = text ? `前回比 ${text}` : '';
+    el.className = `diff ${cls}`;
+  };
+
+  setDiff('diff-weight', last?.weight, prev?.weight);
+  setDiff('diff-fat', last?.fat, prev?.fat);
+  setDiff('diff-muscle', last?.muscle, prev?.muscle);
+}
+
+// ── Chart ─────────────────────────────────────────────────
+function buildChartData(metric) {
+  const sorted = sortedRecords();
+  const labels = sorted.map(r => r.date);
+
+  const ds = [];
+
+  const makeDs = (key, label, color) => ({
+    label,
+    data: sorted.map(r => r[key] ?? null),
+    borderColor: color,
+    backgroundColor: color + '22',
+    borderWidth: 2.5,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    fill: false,
+    spanGaps: true,
+  });
+
+  if (metric === 'all' || metric === 'weight') ds.push(makeDs('weight', '体重 (kg)', '#4f7cff'));
+  if (metric === 'all' || metric === 'fat')    ds.push(makeDs('fat', '体脂肪率 (%)', '#f97316'));
+  if (metric === 'all' || metric === 'muscle') ds.push(makeDs('muscle', '筋肉量 (kg)', '#22c55e'));
+
+  return { labels, datasets: ds };
+}
+
+function renderChart() {
+  const ctx = document.getElementById('chart').getContext('2d');
+  const data = buildChartData(activeMetric);
+
+  if (chart) {
+    chart.data = data;
+    chart.update();
+    return;
+  }
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { font: { size: 12 }, boxWidth: 14, padding: 16 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return v != null ? ` ${ctx.dataset.label}: ${v}` : null;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#e2e8f020' },
+          ticks: { font: { size: 11 }, maxTicksLimit: 10 }
+        },
+        y: {
+          grid: { color: '#e2e8f060' },
+          ticks: { font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ── History table ─────────────────────────────────────────
+function renderHistory() {
+  const tbody = document.getElementById('history-body');
+  const empty = document.getElementById('empty-state');
+  const q = searchQuery.toLowerCase();
+
+  const sorted = sortedRecords().reverse();
+  const filtered = q
+    ? sorted.filter(r => r.date.includes(q) || (r.memo || '').toLowerCase().includes(q))
+    : sorted;
+
+  tbody.innerHTML = '';
+
+  if (filtered.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  filtered.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${r.date}</strong></td>
+      <td>${r.weight != null ? r.weight : '<span style="color:var(--muted)">--</span>'}</td>
+      <td>${r.fat    != null ? r.fat    : '<span style="color:var(--muted)">--</span>'}</td>
+      <td>${r.muscle != null ? r.muscle : '<span style="color:var(--muted)">--</span>'}</td>
+      <td class="memo-cell" title="${escHtml(r.memo || '')}">${escHtml(r.memo || '')}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" data-edit="${r.id}">編集</button>
+        <button class="btn btn-danger" data-del="${r.id}">削除</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Render all ────────────────────────────────────────────
+function render() {
+  updateStats();
+  renderChart();
+  renderHistory();
+}
+
+// ── Form ──────────────────────────────────────────────────
+function resetForm() {
+  document.getElementById('input-date').value = today();
+  document.getElementById('input-weight').value = '';
+  document.getElementById('input-fat').value = '';
+  document.getElementById('input-muscle').value = '';
+  document.getElementById('input-memo').value = '';
+  document.getElementById('submit-btn').textContent = '保存する';
+  editingId = null;
+}
+
+function fillForm(r) {
+  document.getElementById('input-date').value = r.date;
+  document.getElementById('input-weight').value = r.weight ?? '';
+  document.getElementById('input-fat').value = r.fat ?? '';
+  document.getElementById('input-muscle').value = r.muscle ?? '';
+  document.getElementById('input-memo').value = r.memo ?? '';
+  document.getElementById('submit-btn').textContent = '更新する';
+  editingId = r.id;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.getElementById('input-date').focus();
+}
+
+document.getElementById('entry-form').addEventListener('submit', e => {
+  e.preventDefault();
+
+  const date   = document.getElementById('input-date').value;
+  const weight = parseFloat(document.getElementById('input-weight').value) || null;
+  const fat    = parseFloat(document.getElementById('input-fat').value)    || null;
+  const muscle = parseFloat(document.getElementById('input-muscle').value) || null;
+  const memo   = document.getElementById('input-memo').value.trim();
+
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (weight == null && fat == null && muscle == null) {
+    showToast('少なくとも1つの値を入力してください'); return;
+  }
+
+  if (editingId) {
+    const idx = records.findIndex(r => r.id === editingId);
+    if (idx !== -1) records[idx] = { id: editingId, date, weight, fat, muscle, memo };
+    showToast('記録を更新しました');
+  } else {
+    // Check duplicate date
+    const existing = records.find(r => r.date === date);
+    if (existing) {
+      Object.assign(existing, { weight, fat, muscle, memo });
+      showToast('同日のデータを上書きしました');
+    } else {
+      records.push({ id: genId(), date, weight, fat, muscle, memo });
+      showToast('記録を保存しました');
+    }
+  }
+
+  saveData(records);
+  resetForm();
+  render();
+});
+
+// ── History interactions ───────────────────────────────────
+document.getElementById('history-body').addEventListener('click', e => {
+  const editBtn = e.target.closest('[data-edit]');
+  const delBtn  = e.target.closest('[data-del]');
+
+  if (editBtn) {
+    const r = records.find(r => r.id === editBtn.dataset.edit);
+    if (r) fillForm(r);
+  }
+
+  if (delBtn) {
+    if (!confirm('この記録を削除しますか？')) return;
+    records = records.filter(r => r.id !== delBtn.dataset.del);
+    saveData(records);
+    if (editingId === delBtn.dataset.del) resetForm();
+    showToast('削除しました');
+    render();
+  }
+});
+
+// ── Tab bar ───────────────────────────────────────────────
+document.querySelector('.tab-bar').addEventListener('click', e => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  activeMetric = tab.dataset.metric;
+  if (chart) {
+    chart.data = buildChartData(activeMetric);
+    chart.update();
+  }
+});
+
+// ── Search ────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  renderHistory();
+});
+
+// ── Init ──────────────────────────────────────────────────
+resetForm();
+render();
+</script>
+</body>
+</html>
