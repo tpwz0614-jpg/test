@@ -15,10 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./
-          publish_branch: gh-pages
-          exclude_assets: '.github,.git'
+      - name: Deploy index.html to gh-pages branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Prepare a temp dir with only index.html
+          mkdir /tmp/gh-pages-deploy
+          cp index.html /tmp/gh-pages-deploy/index.html
+
+          # Create or reset gh-pages branch as orphan
+          git fetch origin gh-pages 2>/dev/null || true
+          git checkout --orphan gh-pages
+          git rm -rf .
+
+          cp /tmp/gh-pages-deploy/index.html ./index.html
+          touch .nojekyll
+
+          git add index.html .nojekyll
+          git commit -m "Deploy body metrics app to GitHub Pages"
+          git push origin gh-pages --force
