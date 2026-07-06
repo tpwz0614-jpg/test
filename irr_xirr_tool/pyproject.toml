@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "irr-xirr-tool"
+version = "0.1.0"
+description = "IRR/XIRR/NPV/MIRR/payback-period calculator, Excel-IRR()/XIRR()-compatible, with multi-root and no-root detection."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "openpyxl>=3.1",
+    "Flask>=3.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+irr-tool = "irr_xirr_tool.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+irr_xirr_tool = ["templates/*.html"]

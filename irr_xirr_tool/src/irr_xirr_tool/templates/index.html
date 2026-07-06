@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IRR / XIRR 計算ツール</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e7e9ee;
+    --muted: #9aa3b2; --accent: #4f8cff; --ok: #33c17a; --warn: #e0a92e; --err: #e05a4e;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6f8; --panel: #ffffff; --border: #dde1e8; --text: #1b1f27; --muted: #5a6270; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-top: 0; margin-bottom: 20px; font-size: 0.9rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  .panel h2 { font-size: 1rem; margin: 0 0 12px; }
+  fieldset { border: none; padding: 0; margin: 0 0 14px; }
+  legend { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--muted); }
+  label.opt { margin-right: 16px; font-size: 0.92rem; cursor: pointer; }
+  .tabpage { display: none; }
+  .tabpage.active { display: block; }
+  table.cf { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  table.cf th { text-align: left; font-size: 0.78rem; color: var(--muted); font-weight: 500; padding: 4px 6px; }
+  table.cf td { padding: 3px 6px; }
+  table.cf input[type=text], table.cf input[type=date], table.cf input[type=number] {
+    width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); font-size: 0.92rem;
+  }
+  .row-idx { color: var(--muted); font-size: 0.82rem; width: 2.2em; }
+  .row-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 2px 6px; }
+  .row-del:hover { color: var(--err); }
+  button, .btn {
+    border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text);
+    padding: 8px 14px; cursor: pointer; font-size: 0.9rem;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.small { padding: 5px 10px; font-size: 0.82rem; }
+  .rates { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
+  .rates .field { display: flex; flex-direction: column; gap: 4px; }
+  .rates .field label { font-size: 0.8rem; color: var(--muted); }
+  .rates .field input { padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); width: 130px; }
+  input[type=file] { color: var(--text); }
+  .format-note { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+  .actions { margin-top: 14px; }
+  .result-box { border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--border); }
+  .result-box.ok { border-color: var(--ok); }
+  .result-box.warn { border-color: var(--warn); }
+  .result-box.err { border-color: var(--err); }
+  .result-headline { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+  .result-headline.ok { color: var(--ok); }
+  .result-headline.warn { color: var(--warn); }
+  .result-headline.err { color: var(--err); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; }
+  .metric { background: rgba(127,127,127,0.08); border-radius: 8px; padding: 10px 12px; }
+  .metric .k { font-size: 0.78rem; color: var(--muted); }
+  .metric .v { font-size: 1.15rem; font-weight: 600; }
+  .msg { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+  code { background: rgba(127,127,127,0.15); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>IRR / XIRR 計算ツール</h1>
+  <p class="sub">設備投資案件のキャッシュフローから IRR・XIRR・NPV・回収期間・MIRR を算出します（Excel の IRR() / XIRR() と数値一致）。</p>
+
+  {% if error %}
+  <div class="result-box err">
+    <div class="result-headline err">入力エラー</div>
+    <div>{{ error }}</div>
+  </div>
+  {% endif %}
+
+  {% if report %}
+  {% set rr = report.rate_result %}
+  {% set label = "XIRR" if report.mode == "xirr" else "IRR" %}
+  <div class="result-box {{ 'ok' if rr.status == 'unique' else ('warn' if rr.status == 'multiple' else 'err') }}">
+    {% if rr.status == "unique" %}
+      <div class="result-headline ok">{{ label }} = {{ '%.4f'|format(rr.roots[0]*100) }}%</div>
+    {% elif rr.status == "multiple" %}
+      <div class="result-headline warn">{{ label }}: 複数解あり</div>
+      <div>{% for r in rr.roots %}<code>{{ '%.4f'|format(r*100) }}%</code>{% if not loop.last %} / {% endif %}{% endfor %}</div>
+    {% else %}
+      <div class="result-headline err">{{ label }}: 実数解なし</div>
+    {% endif %}
+    <div class="msg">
+      {% if rr.status == "unique" %}
+        探索範囲内で唯一の実数解が見つかりました。
+      {% elif rr.status == "multiple" %}
+        キャッシュフローの符号が複数回反転しているため、{{ label }} が一意に定まりません。経済的に妥当な値を判断のうえ採用してください。
+      {% else %}
+        探索範囲（{{ '%.2f'|format(rr.search_lo*100) }}%〜{{ '%.0f'|format(rr.search_hi*100) }}%）内に実数解が見つかりませんでした。全期間キャッシュフローが同符号でないか、探索範囲を広げる必要がないかご確認ください。
+      {% endif %}
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="k">回収期間</div>
+        <div class="v">
+          {% if report.payback.periods is none %}
+            未回収
+          {% elif report.mode == "xirr" %}
+            {{ '%.2f'|format(report.payback.periods) }} 年
+          {% else %}
+            {{ '%.2f'|format(report.payback.periods) }} 期
+          {% endif %}
+        </div>
+      </div>
+      {% if report.npv %}
+      <div class="metric">
+        <div class="k">NPV @ {{ '%.2f'|format(report.npv.rate*100) }}%</div>
+        <div class="v">{{ '{:,.0f}'.format(report.npv.value) }}</div>
+      </div>
+      {% endif %}
+      {% if report.mirr and not report.mirr.error %}
+      <div class="metric">
+        <div class="k">MIRR{% if report.mirr.is_extension %}（拡張・Excel非標準）{% endif %}</div>
+        <div class="v">{{ '%.4f'|format(report.mirr.value*100) }}%</div>
+      </div>
+      {% endif %}
+    </div>
+    {% if report.mirr and report.mirr.error %}
+    <div class="msg">MIRR 計算不可: {{ report.mirr.error }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('calculate') }}" enctype="multipart/form-data" id="cfform">
+    <div class="panel">
+      <h2>1. 入力方法</h2>
+      <fieldset>
+        <label class="opt"><input type="radio" name="input_type" value="manual" {{ 'checked' if input_type == 'manual' else '' }} onchange="showTab('manual')"> 手入力</label>
+        <label class="opt"><input type="radio" name="input_type" value="csv" {{ 'checked' if input_type == 'csv' else '' }} onchange="showTab('csv')"> CSV アップロード</label>
+        <label class="opt"><input type="radio" name="input_type" value="excel" {{ 'checked' if input_type == 'excel' else '' }} onchange="showTab('excel')"> Excel アップロード</label>
+      </fieldset>
+
+      <div id="tab-manual" class="tabpage {{ 'active' if input_type == 'manual' else '' }}">
+        <fieldset>
+          <legend>期間の種類</legend>
+          <label class="opt"><input type="radio" name="manual_mode" value="irr" {{ 'checked' if manual_mode == 'irr' else '' }} onchange="setManualMode('irr')"> 等間隔（年次）→ IRR</label>
+          <label class="opt"><input type="radio" name="manual_mode" value="xirr" {{ 'checked' if manual_mode == 'xirr' else '' }} onchange="setManualMode('xirr')"> 日付あり（不等間隔）→ XIRR</label>
+        </fieldset>
+
+        <table class="cf" id="cf-table">
+          <thead id="cf-thead">
+            <tr><th class="row-idx">期</th><th id="date-col" style="display:none">日付</th><th>金額</th><th></th></tr>
+          </thead>
+          <tbody id="cf-tbody"></tbody>
+        </table>
+        <button type="button" class="small" onclick="addRow()">+ 行を追加</button>
+        <div class="format-note">初回の行がプロジェクト開始時点（t=0）の投資額（通常はマイナス）です。</div>
+      </div>
+
+      <div id="tab-csv" class="tabpage {{ 'active' if input_type == 'csv' else '' }}">
+        <p class="format-note">
+          列: <code>amount</code> のみ → IRR / <code>date,amount</code> → XIRR（ヘッダー行は任意）。<br>
+          例: <code>-1000000,300000,300000,300000,300000,300000</code>
+        </p>
+        <input type="file" name="file" accept=".csv">
+      </div>
+
+      <div id="tab-excel" class="tabpage {{ 'active' if input_type == 'excel' else '' }}">
+        <p class="format-note">1シート目を読み込みます。列構成は CSV と同じです（<code>amount</code> または <code>date, amount</code>）。</p>
+        <input type="file" name="file" accept=".xlsx,.xlsm,.xls">
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2. 割引率・MIRR パラメータ（任意）</h2>
+      <div class="rates">
+        <div class="field"><label>割引率（NPV用, %）</label><input type="number" step="any" name="rate_pct" placeholder="例: 8" value="{{ form.get('rate_pct', '') }}"></div>
+        <div class="field"><label>MIRR: 資金コスト率（%）</label><input type="number" step="any" name="finance_rate_pct" placeholder="未入力なら割引率を使用" value="{{ form.get('finance_rate_pct', '') }}"></div>
+        <div class="field"><label>MIRR: 再投資率（%）</label><input type="number" step="any" name="reinvest_rate_pct" placeholder="未入力なら割引率を使用" value="{{ form.get('reinvest_rate_pct', '') }}"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="primary">計算する</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function showTab(which) {
+  document.querySelectorAll('.tabpage').forEach(function(el){ el.classList.remove('active'); });
+  document.getElementById('tab-' + which).classList.add('active');
+}
+
+function setManualMode(mode) {
+  document.getElementById('date-col').style.display = (mode === 'xirr') ? '' : 'none';
+  document.querySelectorAll('#cf-tbody tr').forEach(function(tr){
+    tr.querySelector('.date-cell').style.display = (mode === 'xirr') ? '' : 'none';
+  });
+}
+
+function addRow(dateVal, amountVal) {
+  var tbody = document.getElementById('cf-tbody');
+  var idx = tbody.children.length;
+  var mode = document.querySelector('input[name=manual_mode]:checked').value;
+  var tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td class="row-idx">' + idx + '</td>' +
+    '<td class="date-cell" style="display:' + (mode === 'xirr' ? '' : 'none') + '">' +
+      '<input type="date" name="date[]" value="' + (dateVal || '') + '"></td>' +
+    '<td><input type="text" inputmode="decimal" name="amount[]" placeholder="例: -1000000" value="' + (amountVal || '') + '"></td>' +
+    '<td><button type="button" class="row-del" onclick="this.closest(\'tr\').remove(); renumber();">×</button></td>';
+  tbody.appendChild(tr);
+}
+
+function renumber() {
+  document.querySelectorAll('#cf-tbody tr').forEach(function(tr, i){
+    tr.querySelector('.row-idx').textContent = i;
+  });
+}
+
+// seed rows with whatever was submitted last (or the spec's example on first load)
+(function init(){
+  var rows = {{ manual_rows|tojson }};
+  rows.forEach(function(r){ addRow(r.date, r.amount); });
+  showTab({{ input_type|tojson }});
+  setManualMode({{ manual_mode|tojson }});
+})();
+</script>
+</body>
+</html>
