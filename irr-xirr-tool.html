@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IRR / XIRR 計算ツール</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e7e9ee;
+    --muted: #9aa3b2; --accent: #4f8cff; --ok: #33c17a; --warn: #e0a92e; --err: #e05a4e;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6f8; --panel: #ffffff; --border: #dde1e8; --text: #1b1f27; --muted: #5a6270; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-top: 0; margin-bottom: 20px; font-size: 0.9rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  .panel h2 { font-size: 1rem; margin: 0 0 12px; }
+  fieldset { border: none; padding: 0; margin: 0 0 14px; }
+  legend { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--muted); }
+  label.opt { margin-right: 16px; font-size: 0.92rem; cursor: pointer; }
+  .tabpage { display: none; }
+  .tabpage.active { display: block; }
+  table.cf { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  table.cf th { text-align: left; font-size: 0.78rem; color: var(--muted); font-weight: 500; padding: 4px 6px; }
+  table.cf td { padding: 3px 6px; }
+  table.cf input[type=text], table.cf input[type=date], table.cf input[type=number] {
+    width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); font-size: 0.92rem;
+  }
+  .row-idx { color: var(--muted); font-size: 0.82rem; width: 2.2em; }
+  .row-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 2px 6px; }
+  .row-del:hover { color: var(--err); }
+  button, .btn {
+    border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text);
+    padding: 8px 14px; cursor: pointer; font-size: 0.9rem;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.small { padding: 5px 10px; font-size: 0.82rem; }
+  .rates { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
+  .rates .field { display: flex; flex-direction: column; gap: 4px; }
+  .rates .field label { font-size: 0.8rem; color: var(--muted); }
+  .rates .field input { padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); width: 130px; }
+  input[type=file] { color: var(--text); }
+  .format-note { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+  .actions { margin-top: 14px; }
+  .result-box { border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--border); }
+  .result-box.ok { border-color: var(--ok); }
+  .result-box.warn { border-color: var(--warn); }
+  .result-box.err { border-color: var(--err); }
+  .result-headline { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+  .result-headline.ok { color: var(--ok); }
+  .result-headline.warn { color: var(--warn); }
+  .result-headline.err { color: var(--err); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; }
+  .metric { background: rgba(127,127,127,0.08); border-radius: 8px; padding: 10px 12px; }
+  .metric .k { font-size: 0.78rem; color: var(--muted); }
+  .metric .v { font-size: 1.15rem; font-weight: 600; }
+  .msg { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+  code { background: rgba(127,127,127,0.15); padding: 1px 5px; border-radius: 4px; }
+  footer { font-size: 0.78rem; color: var(--muted); margin-top: 24px; text-align: center; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>IRR / XIRR 計算ツール</h1>
+  <p class="sub">設備投資案件のキャッシュフローから IRR・XIRR・NPV・回収期間・MIRR を算出します（Excel の IRR() / XIRR() と数値一致・全てブラウザ内で計算、データは送信されません）。</p>
+
+  <div id="result-area"></div>
+
+  <form id="cfform">
+    <div class="panel">
+      <h2>1. 入力方法</h2>
+      <fieldset>
+        <label class="opt"><input type="radio" name="input_type" value="manual" checked onchange="showTab('manual')"> 手入力</label>
+        <label class="opt"><input type="radio" name="input_type" value="csv" onchange="showTab('csv')"> CSV アップロード</label>
+      </fieldset>
+
+      <div id="tab-manual" class="tabpage active">
+        <fieldset>
+          <legend>期間の種類</legend>
+          <label class="opt"><input type="radio" name="manual_mode" value="irr" checked onchange="setManualMode('irr')"> 等間隔（年次）→ IRR</label>
+          <label class="opt"><input type="radio" name="manual_mode" value="xirr" onchange="setManualMode('xirr')"> 日付あり（不等間隔）→ XIRR</label>
+        </fieldset>
+
+        <table class="cf" id="cf-table">
+          <thead>
+            <tr><th class="row-idx">期</th><th id="date-col" style="display:none">日付</th><th>金額</th><th></th></tr>
+          </thead>
+          <tbody id="cf-tbody"></tbody>
+        </table>
+        <button type="button" class="small" onclick="addRow()">+ 行を追加</button>
+        <div class="format-note">初回の行がプロジェクト開始時点（t=0）の投資額（通常はマイナス）です。</div>
+      </div>
+
+      <div id="tab-csv" class="tabpage">
+        <p class="format-note">
+          列: <code>amount</code> のみ → IRR / <code>date,amount</code> → XIRR（ヘッダー行は任意）。<br>
+          例: <code>-1000000,300000,300000,300000,300000,300000</code>
+        </p>
+        <input type="file" id="csv-file" accept=".csv">
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2. 割引率・MIRR パラメータ（任意）</h2>
+      <div class="rates">
+        <div class="field"><label>割引率（NPV用, %）</label><input type="number" step="any" id="rate_pct" placeholder="例: 8"></div>
+        <div class="field"><label>MIRR: 資金コスト率（%）</label><input type="number" step="any" id="finance_rate_pct" placeholder="未入力なら割引率を使用"></div>
+        <div class="field"><label>MIRR: 再投資率（%）</label><input type="number" step="any" id="reinvest_rate_pct" placeholder="未入力なら割引率を使用"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="primary">計算する</button>
+    </div>
+  </form>
+
+  <footer>
+    Excel の Excel アップロードや CLI・Python ライブラリとしての利用は
+    <a href="https://github.com/tpwz0614-jpg/test/tree/main/irr_xirr_tool" target="_blank" rel="noopener">リポジトリの irr_xirr_tool</a>
+    をご覧ください（このページと同一のロジックを共有しています）。
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- core.py の JS 移植（アルゴリズムはPython版と完全一致） ---------- */
+const DEFAULT_LO = -0.999999;
+const DEFAULT_HI = 10.0;
+const DEFAULT_SCAN_POINTS = 100000;
+const BISECTION_TOL = 1e-12;
+const BISECTION_MAX_ITER = 200;
+const DAYS_PER_YEAR = 365.0;
+const MS_PER_DAY = 86400000;
+
+class InvalidCashFlowError extends Error {}
+
+function validateSigns(amounts) {
+  if (amounts.length < 2) {
+    throw new InvalidCashFlowError("キャッシュフローは2件以上必要です。");
+  }
+  const hasPos = amounts.some((a) => a > 0);
+  const hasNeg = amounts.some((a) => a < 0);
+  if (!(hasPos && hasNeg)) {
+    throw new InvalidCashFlowError(
+      "全期間のキャッシュフローが同符号です（またはゼロ）。NPV=0を満たす有限な利回りは存在しません。" +
+        "マイナス（支出）とプラス（収入）を少なくとも1つずつ含めてください。"
+    );
+  }
+}
+
+function npv(rate, amounts) {
+  if (rate <= -1) throw new Error("rate must be > -1");
+  let sum = 0;
+  for (let i = 0; i < amounts.length; i++) sum += amounts[i] / Math.pow(1 + rate, i);
+  return sum;
+}
+
+function xnpv(rate, amounts, days) {
+  if (rate <= -1) throw new Error("rate must be > -1");
+  let sum = 0;
+  for (let i = 0; i < amounts.length; i++) sum += amounts[i] / Math.pow(1 + rate, days[i] / DAYS_PER_YEAR);
+  return sum;
+}
+
+function bisect(f, a, b, tol = BISECTION_TOL, maxIter = BISECTION_MAX_ITER) {
+  let fa = f(a);
+  let fb = f(b);
+  if (fa === 0) return a;
+  if (fb === 0) return b;
+  for (let i = 0; i < maxIter; i++) {
+    const m = (a + b) / 2;
+    const fm = f(m);
+    if (fm === 0 || (b - a) / 2 < tol) return m;
+    if ((fa < 0) === (fm < 0)) { a = m; fa = fm; } else { b = m; fb = fm; }
+  }
+  return (a + b) / 2;
+}
+
+function scanForRoots(f, lo, hi, nPoints) {
+  const step = (hi - lo) / nPoints;
+  const roots = [];
+  let prevX = lo;
+  let prevF = f(prevX);
+  if (prevF === 0) roots.push(prevX);
+  for (let i = 1; i <= nPoints; i++) {
+    const x = lo + i * step;
+    const fx = f(x);
+    if (fx === 0) {
+      roots.push(x);
+    } else if ((prevF < 0) !== (fx < 0)) {
+      const root = bisect(f, prevX, x);
+      if (roots.length === 0 || Math.abs(root - roots[roots.length - 1]) > 1e-9) roots.push(root);
+    }
+    prevX = x;
+    prevF = fx;
+  }
+  return roots;
+}
+
+function findRoots(f, lo = DEFAULT_LO, hi = DEFAULT_HI, nPoints = DEFAULT_SCAN_POINTS) {
+  const roots = scanForRoots(f, lo, hi, nPoints);
+  if (roots.length === 0) return { roots: [], status: "none", searchLo: lo, searchHi: hi };
+  roots.sort((a, b) => a - b);
+  if (roots.length === 1) return { roots, status: "unique", searchLo: lo, searchHi: hi };
+  return { roots, status: "multiple", searchLo: lo, searchHi: hi };
+}
+
+function irr(amounts, lo = DEFAULT_LO, hi = DEFAULT_HI, nPoints = DEFAULT_SCAN_POINTS) {
+  validateSigns(amounts);
+  return findRoots((r) => npv(r, amounts), lo, hi, nPoints);
+}
+
+function sortByDate(amounts, dates) {
+  const idx = amounts.map((_, i) => i).sort((a, b) => dates[a] - dates[b]);
+  return { amounts: idx.map((i) => amounts[i]), dates: idx.map((i) => dates[i]) };
+}
+
+function xirr(amounts, dates, lo = DEFAULT_LO, hi = DEFAULT_HI, nPoints = DEFAULT_SCAN_POINTS) {
+  validateSigns(amounts);
+  const sorted = sortByDate(amounts, dates);
+  const d0 = sorted.dates[0];
+  const days = sorted.dates.map((d) => (d - d0) / MS_PER_DAY);
+  return findRoots((r) => xnpv(r, sorted.amounts, days), lo, hi, nPoints);
+}
+
+function xnpvFromDates(rate, amounts, dates) {
+  const sorted = sortByDate(amounts, dates);
+  const d0 = sorted.dates[0];
+  const days = sorted.dates.map((d) => (d - d0) / MS_PER_DAY);
+  return xnpv(rate, sorted.amounts, days);
+}
+
+function mirr(amounts, financeRate, reinvestRate) {
+  validateSigns(amounts);
+  const n = amounts.length - 1;
+  let pvNeg = 0;
+  let fvPos = 0;
+  amounts.forEach((a, i) => {
+    if (a < 0) pvNeg += a / Math.pow(1 + financeRate, i);
+    if (a > 0) fvPos += a * Math.pow(1 + reinvestRate, n - i);
+  });
+  if (pvNeg === 0 || fvPos === 0) throw new InvalidCashFlowError("MIRR には支出と収入の両方が必要です。");
+  return Math.pow(fvPos / -pvNeg, 1 / n) - 1;
+}
+
+function xmirr(amounts, dates, financeRate, reinvestRate) {
+  validateSigns(amounts);
+  const sorted = sortByDate(amounts, dates);
+  const d0 = sorted.dates[0];
+  const dn = sorted.dates[sorted.dates.length - 1];
+  const years = (dn - d0) / MS_PER_DAY / DAYS_PER_YEAR;
+  if (years <= 0) throw new InvalidCashFlowError("XMIRR には複数日にまたがるキャッシュフローが必要です。");
+  let pvNeg = 0;
+  let fvPos = 0;
+  sorted.amounts.forEach((a, i) => {
+    const d = sorted.dates[i];
+    if (a < 0) pvNeg += a / Math.pow(1 + financeRate, (d - d0) / MS_PER_DAY / DAYS_PER_YEAR);
+    if (a > 0) fvPos += a * Math.pow(1 + reinvestRate, (dn - d) / MS_PER_DAY / DAYS_PER_YEAR);
+  });
+  if (pvNeg === 0 || fvPos === 0) throw new InvalidCashFlowError("XMIRR には支出と収入の両方が必要です。");
+  return Math.pow(fvPos / -pvNeg, 1 / years) - 1;
+}
+
+function paybackPeriod(amounts) {
+  let cumulative = 0;
+  let prevCumulative = 0;
+  for (let i = 0; i < amounts.length; i++) {
+    prevCumulative = cumulative;
+    cumulative += amounts[i];
+    if (cumulative >= 0 && i > 0) {
+      const fraction = amounts[i] !== 0 ? -prevCumulative / amounts[i] : 0;
+      return { periods: i - 1 + fraction, recovered: true };
+    }
+    if (cumulative >= 0 && i === 0) return { periods: 0, recovered: true };
+  }
+  return { periods: null, recovered: false };
+}
+
+function paybackPeriodDates(amounts, dates) {
+  const sorted = sortByDate(amounts, dates);
+  const d0 = sorted.dates[0];
+  let cumulative = 0;
+  let prevCumulative = 0;
+  let prevYears = 0;
+  for (let i = 0; i < sorted.amounts.length; i++) {
+    const years = (sorted.dates[i] - d0) / MS_PER_DAY / DAYS_PER_YEAR;
+    prevCumulative = cumulative;
+    cumulative += sorted.amounts[i];
+    if (cumulative >= 0 && i > 0) {
+      const fraction = sorted.amounts[i] !== 0 ? (-prevCumulative / sorted.amounts[i]) * (years - prevYears) : 0;
+      return { periods: prevYears + fraction, recovered: true };
+    }
+    if (cumulative >= 0 && i === 0) return { periods: 0, recovered: true };
+    prevYears = years;
+  }
+  return { periods: null, recovered: false };
+}
+
+/* ---------- io.py の JS 移植（手入力・CSV読み込み） ---------- */
+function coerceFloat(cell) {
+  if (cell === null || cell === undefined) return null;
+  if (typeof cell === "number") return cell;
+  const s = String(cell).trim().replace(/,/g, "").replace(/[¥$]/g, "");
+  if (s === "") return null;
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) return null;
+  return parseFloat(s);
+}
+
+function tryDate(y, mo, d) {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
+}
+
+function coerceDate(cell) {
+  if (cell === null || cell === undefined) return null;
+  if (cell instanceof Date) return cell;
+  const s = String(cell).trim();
+  if (s === "") return null;
+  let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return tryDate(+m[1], +m[2], +m[3]);
+  if ((m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/))) return tryDate(+m[1], +m[2], +m[3]);
+  if ((m = s.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/))) return tryDate(+m[1], +m[2], +m[3]);
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) {
+    return tryDate(+m[3], +m[1], +m[2]) || tryDate(+m[3], +m[2], +m[1]);
+  }
+  return null;
+}
+
+function isHeaderish(row) {
+  for (const cell of row) {
+    if (cell === null || cell === undefined) continue;
+    if (typeof cell === "string" && cell.trim() === "") continue;
+    if (coerceFloat(cell) === null && coerceDate(cell) === null) return true;
+  }
+  return false;
+}
+
+function isRowBlank(row) {
+  return row.every((c) => c === null || c === undefined || (typeof c === "string" && c.trim() === ""));
+}
+
+function rowsToSeries(rows) {
+  rows = rows.filter((r) => !isRowBlank(r));
+  if (rows.length === 0) throw new Error("データ行が見つかりません。");
+
+  let header = null;
+  let dataRows = rows;
+  if (isHeaderish(rows[0])) {
+    header = rows[0].map((c) => (c === null || c === undefined ? "" : String(c).trim().toLowerCase()));
+    dataRows = rows.slice(1);
+  }
+  if (dataRows.length === 0) throw new Error("データ行が見つかりません（ヘッダー行のみでした）。");
+
+  const ncols = Math.max(...dataRows.map((r) => r.length));
+  let dateIdx = null;
+  let amountIdx = 0;
+  let dated = false;
+
+  if (header && ncols >= 2 && header.some((h) => h.includes("date"))) {
+    dateIdx = header.findIndex((h) => h.includes("date"));
+    const amtCandidate = header.findIndex((h) => h.includes("amount") || h.includes("cash") || h.includes("value"));
+    amountIdx = amtCandidate >= 0 ? amtCandidate : dateIdx === 0 ? 1 : 0;
+    dated = true;
+  } else if (ncols >= 2 && coerceDate(dataRows[0][0]) !== null) {
+    dateIdx = 0;
+    amountIdx = 1;
+    dated = true;
+  }
+
+  const amounts = [];
+  const dates = [];
+  dataRows.forEach((row, i) => {
+    const amt = coerceFloat(row[amountIdx]);
+    if (amt === null) throw new Error(`${i + 1}行目: 金額を解釈できません（${JSON.stringify(row)}）`);
+    amounts.push(amt);
+    if (dated) {
+      const d = coerceDate(row[dateIdx]);
+      if (d === null) throw new Error(`${i + 1}行目: 日付を解釈できません（${JSON.stringify(row)}）`);
+      dates.push(d);
+    }
+  });
+  return { amounts, dates: dated ? dates : null };
+}
+
+function parseCsvLine(line) {
+  const result = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
+      } else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ",") { result.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseCsv(text) {
+  return text.split(/\r\n|\r|\n/).map(parseCsvLine);
+}
+
+/* ---------- report.py の JS 移植 ---------- */
+function buildReport(series, rate, financeRate, reinvestRate) {
+  const isDated = series.dates !== null;
+  const report = { mode: isDated ? "xirr" : "irr", nCashflows: series.amounts.length };
+
+  const rootResult = isDated ? xirr(series.amounts, series.dates) : irr(series.amounts);
+  const payback = isDated ? paybackPeriodDates(series.amounts, series.dates) : paybackPeriod(series.amounts);
+  report.rateResult = rootResult;
+  report.payback = payback;
+
+  if (rate !== null) {
+    report.npv = {
+      rate,
+      value: isDated ? xnpvFromDates(rate, series.amounts, series.dates) : npv(rate, series.amounts),
+    };
+  }
+
+  if (financeRate !== null && reinvestRate !== null) {
+    try {
+      const value = isDated
+        ? xmirr(series.amounts, series.dates, financeRate, reinvestRate)
+        : mirr(series.amounts, financeRate, reinvestRate);
+      report.mirr = { financeRate, reinvestRate, value, isExtension: isDated };
+    } catch (e) {
+      if (e instanceof InvalidCashFlowError) report.mirr = { error: e.message };
+      else throw e;
+    }
+  }
+
+  return report;
+}
+
+/* ---------- UI ---------- */
+function showTab(which) {
+  document.querySelectorAll(".tabpage").forEach((el) => el.classList.remove("active"));
+  document.getElementById("tab-" + which).classList.add("active");
+}
+
+function setManualMode(mode) {
+  document.getElementById("date-col").style.display = mode === "xirr" ? "" : "none";
+  document.querySelectorAll("#cf-tbody tr").forEach((tr) => {
+    tr.querySelector(".date-cell").style.display = mode === "xirr" ? "" : "none";
+  });
+}
+
+function currentManualMode() {
+  return document.querySelector('input[name=manual_mode]:checked').value;
+}
+
+function addRow(dateVal, amountVal) {
+  const tbody = document.getElementById("cf-tbody");
+  const idx = tbody.children.length;
+  const mode = currentManualMode();
+  const tr = document.createElement("tr");
+  tr.innerHTML =
+    '<td class="row-idx">' + idx + "</td>" +
+    '<td class="date-cell" style="display:' + (mode === "xirr" ? "" : "none") + '">' +
+      '<input type="date" class="date-input" value="' + (dateVal || "") + '"></td>' +
+    '<td><input type="text" class="amount-input" inputmode="decimal" placeholder="例: -1000000" value="' + (amountVal || "") + '"></td>' +
+    '<td><button type="button" class="row-del" onclick="this.closest(\'tr\').remove(); renumber();">×</button></td>';
+  tbody.appendChild(tr);
+}
+
+function renumber() {
+  document.querySelectorAll("#cf-tbody tr").forEach((tr, i) => {
+    tr.querySelector(".row-idx").textContent = i;
+  });
+}
+
+function readManualSeries() {
+  const mode = currentManualMode();
+  const rows = Array.from(document.querySelectorAll("#cf-tbody tr"));
+  if (mode === "xirr") {
+    const pairs = rows
+      .map((tr) => ({ date: tr.querySelector(".date-input").value, amount: tr.querySelector(".amount-input").value }))
+      .filter((p) => p.date.trim() !== "" || p.amount.trim() !== "");
+    if (pairs.length === 0) throw new Error("キャッシュフローを1件以上入力してください。");
+    const amounts = [];
+    const dates = [];
+    pairs.forEach((p, i) => {
+      const d = coerceDate(p.date);
+      const a = coerceFloat(p.amount);
+      if (d === null) throw new Error(`${i + 1}行目: 日付を入力してください。`);
+      if (a === null) throw new Error(`${i + 1}行目: 金額を入力してください。`);
+      dates.push(d);
+      amounts.push(a);
+    });
+    return { amounts, dates };
+  }
+  const amounts = rows
+    .map((tr) => tr.querySelector(".amount-input").value)
+    .filter((v) => v.trim() !== "")
+    .map((v, i) => {
+      const f = coerceFloat(v);
+      if (f === null) throw new Error(`${i + 1}行目: 金額 "${v}" を解釈できません。`);
+      return f;
+    });
+  if (amounts.length === 0) throw new Error("キャッシュフローを1件以上入力してください。");
+  return { amounts, dates: null };
+}
+
+function parsePct(id) {
+  const v = document.getElementById(id).value.trim();
+  if (v === "") return null;
+  return parseFloat(v) / 100.0;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderResult(report, error) {
+  const area = document.getElementById("result-area");
+  if (error) {
+    area.innerHTML =
+      '<div class="result-box err"><div class="result-headline err">入力エラー</div><div>' +
+      escapeHtml(error) + "</div></div>";
+    return;
+  }
+
+  const rr = report.rateResult;
+  const label = report.mode === "xirr" ? "XIRR" : "IRR";
+  const boxClass = rr.status === "unique" ? "ok" : rr.status === "multiple" ? "warn" : "err";
+  let headline, msg;
+  if (rr.status === "unique") {
+    headline = `<div class="result-headline ok">${label} = ${(rr.roots[0] * 100).toFixed(4)}%</div>`;
+    msg = "探索範囲内で唯一の実数解が見つかりました。";
+  } else if (rr.status === "multiple") {
+    const chips = rr.roots.map((r) => `<code>${(r * 100).toFixed(4)}%</code>`).join(" / ");
+    headline = `<div class="result-headline warn">${label}: 複数解あり</div><div>${chips}</div>`;
+    msg = `キャッシュフローの符号が複数回反転しているため、${label} が一意に定まりません。経済的に妥当な値を判断のうえ採用してください。`;
+  } else {
+    headline = `<div class="result-headline err">${label}: 実数解なし</div>`;
+    msg = `探索範囲（${(rr.searchLo * 100).toFixed(2)}%〜${(rr.searchHi * 100).toFixed(0)}%）内に実数解が見つかりませんでした。` +
+      "全期間キャッシュフローが同符号でないか、探索範囲を広げる必要がないかご確認ください。";
+  }
+
+  let metrics = "";
+  const pb = report.payback;
+  const pbVal = pb.periods === null ? "未回収" : report.mode === "xirr" ? pb.periods.toFixed(2) + " 年" : pb.periods.toFixed(2) + " 期";
+  metrics += `<div class="metric"><div class="k">回収期間</div><div class="v">${pbVal}</div></div>`;
+  if (report.npv) {
+    metrics += `<div class="metric"><div class="k">NPV @ ${(report.npv.rate * 100).toFixed(2)}%</div><div class="v">${Math.round(report.npv.value).toLocaleString()}</div></div>`;
+  }
+  let mirrMsg = "";
+  if (report.mirr && !report.mirr.error) {
+    const ext = report.mirr.isExtension ? "（拡張・Excel非標準）" : "";
+    metrics += `<div class="metric"><div class="k">MIRR${ext}</div><div class="v">${(report.mirr.value * 100).toFixed(4)}%</div></div>`;
+  } else if (report.mirr && report.mirr.error) {
+    mirrMsg = `<div class="msg">MIRR 計算不可: ${escapeHtml(report.mirr.error)}</div>`;
+  }
+
+  area.innerHTML =
+    `<div class="result-box ${boxClass}">${headline}<div class="msg">${msg}</div>` +
+    `<div class="metrics">${metrics}</div>${mirrMsg}</div>`;
+}
+
+document.getElementById("cfform").addEventListener("submit", function (e) {
+  e.preventDefault();
+  const inputType = document.querySelector('input[name=input_type]:checked').value;
+  const rate = parsePct("rate_pct");
+  const financeRate = parsePct("finance_rate_pct") ?? rate;
+  const reinvestRate = parsePct("reinvest_rate_pct") ?? rate;
+
+  const compute = (series) => {
+    try {
+      const report = buildReport(series, rate, financeRate, reinvestRate);
+      renderResult(report, null);
+    } catch (err) {
+      renderResult(null, err.message);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (inputType === "csv") {
+    const fileInput = document.getElementById("csv-file");
+    const file = fileInput.files[0];
+    if (!file) { renderResult(null, "CSVファイルを選択してください。"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rows = parseCsv(reader.result);
+        const series = rowsToSeries(rows);
+        compute(series);
+      } catch (err) {
+        renderResult(null, err.message);
+      }
+    };
+    reader.readAsText(file);
+    return;
+  }
+
+  try {
+    compute(readManualSeries());
+  } catch (err) {
+    renderResult(null, err.message);
+  }
+});
+
+// seed with the spec's example on first load
+(function initDefaultRows() {
+  const defaults = [-1000000, 300000, 300000, 300000, 300000, 300000];
+  defaults.forEach((v) => addRow(null, v));
+})();
+</script>
+</body>
+</html>
